@@ -1,0 +1,50 @@
+Gracias por llamar a IDEMEFA, le habla [Tu Nombre], �c�mo puedo asistirle el d�a de hoy?
+Perfecto! Le compartir� nuestra mejor oferta disponible. Y si le interesa, puedo ayudarle a procesar su pedido ahora mismo para que lo reciba cuanto antes.
+Excelente decisi�n! Perm�tame tomarle los datos para procesarlo. Mientras tanto, tambi�n puedo informarle sobre otras promociones que podr�an interesarle.
+Ofrecer contacto a trav�s de otro canal m�s conveniente.
+Crear urgencia y mostrar el beneficio inmediato.
+Resaltar lo que hace �nica a la empresa.
+Brindar informaci�n clara antes de insistir.
+Mostrar disposici�n para corregir errores sin inconvenientes.
+Ofrecer alternativas de pago.
+Eliminar posibles confusiones o excusas.
+Mostrar inter�s en solucionar problemas de manera efectiva.
+Destacar ventajas adicionales.
+Ajustar la oferta a la cantidad comprada.
+Adaptarse al m�todo de contacto preferido del cliente.
+Ajustarse a la disponibilidad del cliente.
+Ofrecer testimonios o garant�as para generar confianza.
+Mostrar que la marca es confiable.
+Crear sensaci�n de oportunidad.
+Comprender la duda del cliente y ofrecer una soluci�n espec�fica.
+Perfecto, [Nombre del cliente]! Quedamos entonces en [resumen de acciones acordadas, ej. enviar informaci�n, programar una reuni�n]. Por nuestra parte, nos ponemos a trabajar en esto y le confirmamos [fecha/hora]. Adem�s, si surge cualquier imprevisto o necesita ajustar algo, aqu� estaremos. �Algo m�s en lo que podamos ayudar hoy?
+No tengo tiempo para hablar ahora
+Solo estoy preguntando precios
+No recuerdo haber hecho ese pedido
+Me equivoqu� en el pedido
+No puedo pagar todo ahora
+No he recibido la factura
+Me cobraron mal
+Lo encontr� m�s barato en l�nea
+Me ofrecieron un mejor precio con descuento por volumen
+No quiero recibir llamadas de ventas
+Estoy ocupado, no quiero hablar ahora
+No s� si este producto es de buena calidad
+No conozco la marca
+Lo pensar� y luego le confirmo
+No estoy seguro de si realmente lo necesito
+No me interesa
+Estoy buscando otras opciones
+No quiero comprar ahora
+Ll�mame m�s tarde
+No conf�o en esta empresa
+Estoy muy ocupado para hablar
+No quiero dar mis datos personales
+No me gusta c�mo hablan
+No necesito ayuda
+Prefiero buscar por mi cuenta
+Estoy satisfecho con mi proveedor actual
+No tengo presupuesto
+La calidad no me convence
+El precio es muy alto
+No me gusta la atenci�n al cliente
