@@ -46,7 +46,8 @@ sns.set_theme(
 
 class Config:
     def __init__(self):
-        self.DRIVE_FOLDER_ID = '16ZPWdgiTTtiSO5n5_uFmHeTCLlbg5DPu'
+        import streamlit as st
+        self.DRIVE_FOLDER_ID = st.secrets["gdrive"]["folder_id"]
         self.WHISPER_MODEL = 'medium'
         self.SENTIMENT_MODEL = 'distilbert-base-uncased-finetuned-sst-2-english'
         self.SIMILARITY_MODEL = 'all-MiniLM-L6-v2'
@@ -1298,3 +1299,4 @@ class CallMonitoringSystem:
 if __name__ == "__main__":
     system = CallMonitoringSystem()
     system.run_streamlit_dashboard()  # ✅ Streamlit visualización, no procesamiento automático
+
