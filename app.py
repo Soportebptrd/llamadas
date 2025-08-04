@@ -1297,4 +1297,4 @@ class CallMonitoringSystem:
 
 if __name__ == "__main__":
     system = CallMonitoringSystem()
-    system.run_streamlit_dashboard()
+    system.run_streamlit_dashboard()  # ✅ Streamlit visualización, no procesamiento automático
