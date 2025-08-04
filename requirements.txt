@@ -1,0 +1,12 @@
+streamlit
+pydrive2
+gspread
+oauth2client
+whisper
+librosa
+transformers
+sentence-transformers
+matplotlib
+seaborn
+numpy
+pandas
