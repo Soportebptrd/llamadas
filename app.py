@@ -23,6 +23,8 @@ import matplotlib.ticker as ticker
 from matplotlib import rcParams
 import plotly.express as px
 import traceback
+from pathlib import Path
+
 
 # Configuración de estilo para gráficos
 try:
@@ -69,11 +71,63 @@ class Config:
         self.SHEET_NAME = "CallMonitoringResults"
         self.DRIVE_BASE_URL = "https://drive.google.com/file/d/"
 
+    def _load_credentials_from_secrets(self):
+        """Carga credenciales desde Streamlit Secrets y crea archivos temporales"""
+        try:
+            # Crear client_secrets.json para Google Drive
+            client_secrets = {
+                "installed": {
+                    "client_id": st.secrets["google_drive"]["client_id"],
+                    "project_id": st.secrets["google_drive"]["project_id"],
+                    "auth_uri": st.secrets["google_drive"]["auth_uri"],
+                    "token_uri": st.secrets["google_drive"]["token_uri"],
+                    "auth_provider_x509_cert_url": st.secrets["google_drive"]["auth_provider_x509_cert_url"],
+                    "client_secret": st.secrets["google_drive"]["client_secret"],
+                    "redirect_uris": st.secrets["google_drive"]["redirect_uris"]
+                }
+            }
+            Path("client_secrets.json").write_text(json.dumps(client_secrets))
+
+            # Crear service_account.json para Google Sheets
+            service_account = {
+                "type": st.secrets["google_sheets"]["type"],
+                "project_id": st.secrets["google_sheets"]["project_id"],
+                "private_key_id": st.secrets["google_sheets"]["private_key_id"],
+                "private_key": st.secrets["google_sheets"]["private_key"],
+                "client_email": st.secrets["google_sheets"]["client_email"],
+                "client_id": st.secrets["google_sheets"]["client_id"],
+                "auth_uri": st.secrets["google_sheets"]["auth_uri"],
+                "token_uri": st.secrets["google_sheets"]["token_uri"],
+                "auth_provider_x509_cert_url": st.secrets["google_sheets"]["auth_provider_x509_cert_url"],
+                "client_x509_cert_url": st.secrets["google_sheets"]["client_x509_cert_url"],
+                "universe_domain": st.secrets["google_sheets"]["universe_domain"]
+            }
+            Path("service_account.json").write_text(json.dumps(service_account))
+
+        except KeyError as e:
+            st.error(f"Falta configuración en Secrets: {str(e)}")
+            st.stop()
+        except Exception as e:
+            st.error(f"Error cargando credenciales: {str(e)}")
+            st.stop()
+
+class DriveConnector:
+    def __init__(self):
+        self.gauth = GoogleAuth()
+        # El resto de tu inicialización...
+        
+    def _setup_auth(self):
+        """Modificado para usar el archivo generado desde Secrets"""
+        if not Path("client_secrets.json").exists():
+            st.error("No se pudo generar client_secrets.json desde Secrets")
+            st.stop()
+
 class GoogleSheetsManager:
     def __init__(self, config):
-        self.config = config
         self.scope = ['https://spreadsheets.google.com/feeds',
                      'https://www.googleapis.com/auth/drive']
+                     
+        # Usar el archivo generado desde Secrets
         self.credentials = ServiceAccountCredentials.from_json_keyfile_name(
             'service_account.json', self.scope)
         self.client = gspread.authorize(self.credentials)
@@ -107,14 +161,14 @@ class DriveConnector:
         if not os.path.exists('settings.yaml'):
             with open('settings.yaml', 'w') as f:
                 f.write("""
-client_config_backend: file
-client_config_file: client_secrets.json
-save_credentials: true
-save_credentials_backend: file
-save_credentials_file: credentials.json
-get_refresh_token: true
-access_type: offline
-""")
+                        client_config_backend: file
+                        client_config_file: client_secrets.json
+                        save_credentials: true
+                        save_credentials_backend: file
+                        save_credentials_file: credentials.json
+                        get_refresh_token: true
+                        access_type: offline
+                        """)
         
         try:
             # Forzar la autenticación offline
@@ -236,9 +290,7 @@ class TextAnalyzer:
         # Cargar modelos primero
         self.sentiment_analyzer = pipeline("sentiment-analysis", 
                                          model=self.config.SENTIMENT_MODEL)
-        self.similarity_model = SentenceTransformer(
-    os.path.join("C:/Users/chado_9vmqkdc/.cache/torch/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2")
-)
+        self.similarity_model = SentenceTransformer('all-MiniLM-L6-v2')
         
         # Cargar frases del guión con manejo de errores
         self.script_phrases = self._load_script_phrases()
@@ -540,7 +592,7 @@ class TranscriptAnalyzer:
         return aligned_results
     
     def _calculate_similarity(self, text1, text2):
-        model = SentenceTransformer("C:/Users/chado_9vmqkdc/.cache/torch/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2")
+        model = SentenceTransformer('all-MiniLM-L6-v2')
         embedding1 = model.encode(text1, convert_to_tensor=True)
         embedding2 = model.encode(text2, convert_to_tensor=True)
         return util.pytorch_cos_sim(embedding1, embedding2).item()
