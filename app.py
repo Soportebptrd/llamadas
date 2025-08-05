@@ -10,7 +10,8 @@ from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 import whisper
 from transformers.pipelines import pipeline
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import SentenceTransformer
+import torch
 import librosa
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -20,6 +21,8 @@ import numpy as np
 from urllib.parse import quote
 import matplotlib.ticker as ticker
 from matplotlib import rcParams
+import plotly.express as px
+import traceback
 
 # Configuración de estilo para gráficos
 try:
@@ -46,12 +49,13 @@ sns.set_theme(
 
 class Config:
     def __init__(self):
-        import streamlit as st
-        self.DRIVE_FOLDER_ID = st.secrets["gdrive"]["folder_id"]
+        self.DRIVE_FOLDER_ID = '16ZPWdgiTTtiSO5n5_uFmHeTCLlbg5DPu'
         self.WHISPER_MODEL = 'medium'
         self.SENTIMENT_MODEL = 'distilbert-base-uncased-finetuned-sst-2-english'
         self.SIMILARITY_MODEL = 'all-MiniLM-L6-v2'
         self.SCRIPT_FILE = 'guion_oficial.txt'
+        self.WHISPER_MODEL = 'medium'  # o 'small', 'large' según tus necesidades
+        self.WHISPER_CACHE_DIR = './models/whisper'  # Directorio para cache
         self.REQUIRED_PHRASES = ['saludo', 'presentación', 'oferta', 'cierre']
         self.OUTPUT_FOLDER = 'results'
         self.AUDIO_FOLDER = 'downloaded_audios'
@@ -99,6 +103,7 @@ class DriveConnector:
         self.config = Config()
     
     def _setup_auth(self):
+        # Asegúrate de que el archivo settings.yaml existe con la configuración correcta
         if not os.path.exists('settings.yaml'):
             with open('settings.yaml', 'w') as f:
                 f.write("""
@@ -110,7 +115,13 @@ save_credentials_file: credentials.json
 get_refresh_token: true
 access_type: offline
 """)
+        
         try:
+            # Forzar la autenticación offline
+            self.gauth.GetFlow()
+            self.gauth.flow.params['access_type'] = 'offline'
+            self.gauth.flow.params['approval_prompt'] = 'force'
+            
             if os.path.exists('credentials.json'):
                 self.gauth.LoadCredentialsFile('credentials.json')
             
@@ -122,6 +133,7 @@ access_type: offline
                 self.gauth.Authorize()
             
             self.gauth.SaveCredentialsFile('credentials.json')
+            
         except Exception as e:
             st.error(f"Error de autenticación: {str(e)}")
             st.stop()
@@ -170,12 +182,29 @@ def _apply_color(self, value, threshold=60):
 class AudioProcessor:
     def __init__(self, config):
         self.config = config
-        self.model = whisper.load_model(self.config.WHISPER_MODEL)
+        # Cargar el modelo con el método correcto
+        try:
+            self.model = whisper.load_model(self.config.WHISPER_MODEL, device="cpu")
+        except NotImplementedError:
+            # Solución alternativa para el error de meta tensor
+            self.model = whisper.load_model(self.config.WHISPER_MODEL, device="cpu", in_memory=True)
+        
         self.transcriptions_folder = os.path.join(config.OUTPUT_FOLDER, 'transcriptions')
         os.makedirs(self.transcriptions_folder, exist_ok=True)
     
-    def transcribe_audio(self, audio_path):
-        result = self.model.transcribe(audio_path)
+def transcribe_audio(self, audio_path):
+    # Asegurar que el modelo está en CPU
+    if next(self.model.parameters()).is_meta:
+        self.model.to_empty(device="cpu")
+    
+        # Configurar opciones de transcripción
+        options = {
+            'language': 'es',  # Cambia según el idioma
+            'task': 'transcribe',
+            'fp16': False  # Importante para CPU
+        }
+
+        result = self.model.transcribe(audio_path, **options)
         
         # Agregar metadatos adicionales
         result['metadata'] = {
@@ -203,12 +232,13 @@ class AudioProcessor:
 class TextAnalyzer:
     def __init__(self, config):
         self.config = config
-        print(f"Ruta del guión: {os.path.abspath(self.config.SCRIPT_FILE)}")
-        
+              
         # Cargar modelos primero
         self.sentiment_analyzer = pipeline("sentiment-analysis", 
                                          model=self.config.SENTIMENT_MODEL)
-        self.similarity_model = SentenceTransformer(self.config.SIMILARITY_MODEL)
+        self.similarity_model = SentenceTransformer(
+    os.path.join("C:/Users/chado_9vmqkdc/.cache/torch/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2")
+)
         
         # Cargar frases del guión con manejo de errores
         self.script_phrases = self._load_script_phrases()
@@ -510,7 +540,7 @@ class TranscriptAnalyzer:
         return aligned_results
     
     def _calculate_similarity(self, text1, text2):
-        model = SentenceTransformer(self.config.SIMILARITY_MODEL)
+        model = SentenceTransformer("C:/Users/chado_9vmqkdc/.cache/torch/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2")
         embedding1 = model.encode(text1, convert_to_tensor=True)
         embedding2 = model.encode(text2, convert_to_tensor=True)
         return util.pytorch_cos_sim(embedding1, embedding2).item()
@@ -595,107 +625,244 @@ class Dashboard:
         
         return df
     
-    def _explain_metrics(self):
-        """Explica las métricas clave"""
-        with st.expander("📊 Explicación de Métricas"):
+    def _display_kpi_explanations(self):
+        """Muestra explicaciones detalladas de todos los KPIs"""
+        with st.expander("📚 GLOSARIO DE KPIs Y MÉTRICAS", expanded=False):
             st.markdown("""
-            **Apego al Guión (%):**  
-            Porcentaje de coincidencia entre lo dicho por el vendedor y el guión oficial.  
-            * >75%: Excelente | 60-75%: Bueno | <60%: Necesita mejora*
-
-            **Apego Positivo:**  
-            Frases que coinciden con el guión y tienen sentimiento positivo.
-
-            **Apego Negativo:**  
-            Frases que coinciden con el guión pero tienen sentimiento negativo.
-
-            **Sentimiento (%):**  
-            Porcentaje de frases con tono positivo detectado.  
-            * >70%: Muy positivo | 50-70%: Neutral | <50%: Negativo*
-
-            **Interrupciones:**  
-            Número de veces que el cliente interrumpe al vendedor.  
-            * >5: Muchas interrupciones | 3-5: Normal | <3: Buen flujo*
-
-            **Frases Coincidentes:**  
-            Listado de frases del guión que fueron identificadas en la llamada.
-
-            **Frases Faltantes:**  
-            Frases clave del guión que no se mencionaron en la llamada.
+            ### 📊 KPIs Principales
+            
+            **1. Apego al Guión (%)**  
+            *Definición:* Porcentaje de coincidencia entre lo dicho por el vendedor y el guión oficial.  
+            *Interpretación:*  
+            - 🟢 >80%: Excelente seguimiento del guión  
+            - 🟡 60-80%: Cumplimiento aceptable  
+            - 🔴 <60%: Necesita mejora en el seguimiento  
+            *Cálculo:* (Frases coincidentes / Total frases vendedor) × 100
+            
+            **2. Tono Positivo (%)**  
+            *Definición:* Porcentaje de frases con sentimiento positivo detectado.  
+            *Interpretación:*  
+            - 🟢 >70%: Clima muy positivo  
+            - 🟡 50-70%: Neutral  
+            - 🔴 <50%: Tono negativo predominante  
+            *Cálculo:* (Frases positivas / Total frases) × 100
+            
+            **3. Fluidez (1-10)**  
+            *Definición:* Puntuación inversa de interrupciones (10 - interrupciones).  
+            *Interpretación:*  
+            - 🟢 9-10: Conversación fluida  
+            - 🟡 6-8: Diálogo normal  
+            - 🔴 <6: Muchas interrupciones  
+            *Cálculo:* 10 - min(Interrupciones, 10)
+            
+            **4. Balance Conversacional (%)**  
+            *Definición:* Proporción de intervenciones del vendedor vs cliente.  
+            *Interpretación:*  
+            - 🟢 55-65%: Balance ideal  
+            - 🟡 >70%: Vendedor dominante  
+            - 🔴 <50%: Cliente dominante  
+            *Cálculo:* (Segmentos vendedor / Total segmentos) × 100
+            
+            **5. Eficiencia Temporal**  
+            *Definición:* Relación entre apego y duración (mayor = mejor).  
+            *Interpretación:*  
+            - 🟢 >1.5: Muy eficiente  
+            - 🟡 1.0-1.5: Normal  
+            - 🔴 <1.0: Poco eficiente  
+            *Cálculo:* (Apego (%) / Duración (s)) × 1000
+            
+            **6. Cobertura de Frases Clave (%)**  
+            *Definición:* Porcentaje de llamadas que incluyen todas las frases requeridas.  
+            *Interpretación:*  
+            - 🟢 100%: Completo  
+            - 🔴 <100%: Frases omitidas  
+            *Cálculo:* (1 - Llamadas con frases faltantes / Total llamadas) × 100
+            
+            ---
+            
+            ### 📈 Métricas Complementarias
+            
+            **• Interrupciones:** Número de veces que el cliente interrumpe al vendedor.  
+            **• Cambios de Hablante:** Frecuencia de alternancia entre vendedor y cliente.  
+            **• Duración (s):** Tiempo total de la llamada en segundos.  
+            **• Frases Coincidentes:** Listado de frases del guión identificadas.  
+            **• Frases Faltantes:** Frases clave no mencionadas en la llamada.  
+            **• Nuevas Frases:** Expresiones positivas no incluidas en el guión original.  
+            
+            ---
+            
+            ### 📌 Cómo Interpretar los Gráficos
+            
+            **1. Relación Apego vs Sentimiento**  
+            - Cuadrante superior derecho (🟢): Llamadas ideales  
+            - Cuadrante inferior izquierdo (🔴): Llamadas críticas  
+            - Tamaño de burbujas: Duración de la llamada  
+            
+            **2. Análisis Multivariable**  
+            - Permite visualizar múltiples métricas simultáneamente  
+            - Líneas más altas = mejor desempeño en esa métrica  
+            
+            **3. Benchmarking de Equipo**  
+            - Compara el desempeño entre vendedores  
+            - Verde = sobre el promedio | Rojo = bajo promedio  
             """)
     
-    def _create_metric_card(self, title, value, delta=None, delta_color="normal"):
-        """Crea una tarjeta de métrica con formato profesional"""
-        st.metric(
-            label=title,
-            value=value,
-            delta=delta,
-            delta_color=delta_color
-        )
-    
-    def _create_bar_chart(self, data, x, y, title, x_label=None, y_label=None, color=None, format_yaxis=False):
-        """Crea un gráfico de barras profesional"""
-        fig, ax = plt.subplots(figsize=(10, 6))
-        
-        if color:
-            sns.barplot(x=x, y=y, data=data, ax=ax, color=color)
-        else:
-            sns.barplot(x=x, y=y, data=data, ax=ax)
-        
-        ax.set_title(title, fontweight='bold', pad=20)
-        if x_label:
-            ax.set_xlabel(x_label)
-        if y_label:
-            ax.set_ylabel(y_label)
-        
-        # Formatear ejes
-        if format_yaxis:
-            ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
-        
-        # Rotar etiquetas si es necesario
-        if len(data[x]) > 5:
-            plt.xticks(rotation=45, ha='right')
-        
-        # Añadir valores en las barras
-        for p in ax.patches:
-            ax.annotate(
-                f"{p.get_height():,.1f}", 
-                (p.get_x() + p.get_width() / 2., p.get_height()),
-                ha='center', va='center', xytext=(0, 10), 
-                textcoords='offset points'
-            )
-        
-        plt.tight_layout()
-        st.pyplot(fig)
-    
-    def _create_line_chart(self, data, x, y, title, x_label=None, y_label=None, format_yaxis=False):
-        """Crea un gráfico de líneas profesional"""
-        fig, ax = plt.subplots(figsize=(10, 6))
-        
-        sns.lineplot(x=x, y=y, data=data, ax=ax, marker='o', linewidth=2.5)
-        
-        ax.set_title(title, fontweight='bold', pad=20)
-        if x_label:
-            ax.set_xlabel(x_label)
-        if y_label:
-            ax.set_ylabel(y_label)
-        
-        # Formatear ejes
-        if format_yaxis:
-            ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
-        
-        # Añadir valores en los puntos
-        for line in ax.lines:
-            for x_val, y_val in zip(line.get_xdata(), line.get_ydata()):
-                ax.annotate(
-                    f"{y_val:,.1f}", 
-                    (x_val, y_val),
-                    textcoords="offset points", xytext=(0,10), 
-                    ha='center'
+    def _create_kpi_tab(self, df):
+        """Crea la pestaña con todos los KPIs"""
+        with st.container():
+            st.subheader("📊 Indicadores Clave de Desempeño")
+            
+            # Calcular métricas compuestas
+            df['Fluidez'] = 10 - np.minimum(df['Interrupciones'], 10)
+            df['Balance_Conversacional'] = df['Segmentos Vendedor'] / (df['Segmentos Vendedor'] + df['Segmentos Cliente']) * 100
+            df['Eficiencia_Temporal'] = (df['Apego (%)'] / df['Duración (s)']) * 1000
+            df['Cobertura_Frases'] = (df['Frases Faltantes'] == 'Ninguna').astype(int) * 100
+            
+            # Primera fila de KPIs principales
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Apego al Guión", 
+                       f"{df['Apego (%)'].mean():.1f}%", 
+                       help="Porcentaje de coincidencia con el guión oficial")
+            
+            col2.metric("Tono Positivo", 
+                       f"{df['Sentimiento (%)'].mean():.1f}%", 
+                       help="Porcentaje de frases con tono positivo")
+            
+            col3.metric("Fluidez", 
+                       f"{df['Fluidez'].mean():.1f}/10", 
+                       help="Puntuación inversa de interrupciones (10 = perfecto)")
+            
+            # Segunda fila de KPIs complementarios
+            col4, col5, col6 = st.columns(3)
+            col4.metric("Balance Conversacional", 
+                       f"{df['Balance_Conversacional'].mean():.1f}%", 
+                       help="Proporción vendedor/cliente (ideal 55-65%)")
+            
+            col5.metric("Eficiencia Temporal", 
+                       f"{df['Eficiencia_Temporal'].mean():.2f}", 
+                       help="Relación apego/duración (mayor = mejor)")
+            
+            col6.metric("Cobertura de Frases", 
+                       f"{df['Cobertura_Frases'].mean():.1f}%", 
+                       help="% llamadas con todas las frases clave")
+            
+            # Gráficos de correlación
+            st.subheader("🔍 Relaciones entre Métricas")
+            tab1, tab2 = st.tabs(["Apego vs Sentimiento", "Análisis Multivariable"])
+            
+            with tab1:
+                fig = px.scatter(
+                    df, 
+                    x="Apego (%)", 
+                    y="Sentimiento (%)", 
+                    color="Duración (s)",
+                    size="Interrupciones",
+                    hover_name="Audio",
+                    trendline="lowess",
+                    title="Relación entre Apego al Guión y Tono Positivo",
+                    labels={
+                        "Apego (%)": "Apego al Guión (%)",
+                        "Sentimiento (%)": "Tono Positivo (%)",
+                        "Duración (s)": "Duración (segundos)"
+                    }
                 )
-        
-        plt.tight_layout()
-        st.pyplot(fig)
+                fig.update_layout(
+                    annotations=[
+                        dict(
+                            x=0.5, y=1.1,
+                            xref="paper", yref="paper",
+                            text="🔹 Llamadas ideales: Alto apego + Alto tono positivo<br>🔹 Riesgo: Bajo apego + Bajo tono positivo",
+                            showarrow=False,
+                            font=dict(size=12)
+                        )
+                    ]
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with tab2:
+                fig = px.parallel_coordinates(
+                    df,
+                    dimensions=['Apego (%)', 'Sentimiento (%)', 'Fluidez', 'Duración (s)'],
+                    color='Apego (%)',
+                    labels={
+                        'Apego (%)': 'Apego (%)',
+                        'Sentimiento (%)': 'Sentimiento (%)',
+                        'Fluidez': 'Fluidez (1-10)',
+                        'Duración (s)': 'Duración (s)'
+                    },
+                    title="Perfil Multidimensional de las Llamadas"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Sistema de clasificación
+            st.subheader("📈 Clasificación de Llamadas")
+            st.markdown("""
+            **Sistema de puntuación compuesta:**  
+            🔹 **Apego al guión (50% peso)** - Consistencia con el mensaje clave  
+            🔹 **Tono positivo (30% peso)** - Clima emocional de la conversación  
+            🔹 **Fluidez (20% peso)** - Naturalidad en el diálogo  
+            """)
+            
+            # Calcular puntuación compuesta
+            df['Puntuación'] = (
+                (df['Apego (%)'] * 0.5) + 
+                (df['Sentimiento (%)'] * 0.3) + 
+                (df['Fluidez'] * 10 * 0.2)
+            )
+            
+            # Asignar categorías
+            conditions = [
+                df['Puntuación'] >= 85,
+                df['Puntuación'] >= 70,
+                df['Puntuación'] >= 50,
+                df['Puntuación'] < 50
+            ]
+            choices = [
+                "🏆 Ejemplar (85-100 pts)",
+                "✅ Satisfactorio (70-84 pts)",
+                "⚠️ Necesita Mejora (50-69 pts)",
+                "🔴 Crítico (<50 pts)"
+            ]
+            df['Evaluación'] = np.select(conditions, choices)
+            
+            # Mostrar tabla con estilo
+            st.dataframe(
+                df[['Audio', 'Fecha', 'Apego (%)', 'Sentimiento (%)', 
+                   'Interrupciones', 'Puntuación', 'Evaluación']]
+                .sort_values('Puntuación', ascending=False)
+                .style
+                .background_gradient(subset=['Puntuación'], cmap='RdYlGn')
+                .format({'Apego (%)': '{:.1f}%', 'Sentimiento (%)': '{:.1f}%', 
+                        'Puntuación': '{:.1f}'}),
+                use_container_width=True,
+                height=500
+            )
+            
+            # Benchmarking de equipo
+            st.subheader("🏅 Benchmarking de Equipo")
+            st.markdown("Comparativa de desempeño entre todos los vendedores:")
+            
+            metrics = ['Apego (%)', 'Sentimiento (%)', 'Puntuación']
+            df_melted = df.groupby("Vendedor")[metrics].mean().reset_index().melt(id_vars="Vendedor")
+            
+            fig = px.bar(
+                df_melted, 
+                x="Vendedor", 
+                y="value", 
+                color="variable",
+                barmode="group",
+                facet_col="variable",
+                facet_col_spacing=0.05,
+                labels={"value": "Puntuación", "variable": "Métrica"},
+                height=400
+            )
+            
+            fig.update_xaxes(tickangle=45)
+            fig.update_layout(showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Mostrar explicaciones
+            self._display_kpi_explanations()
     
     def display_executive_summary(self, df):
         """Vista General para el supervisor"""
@@ -831,8 +998,6 @@ class Dashboard:
                 st.pyplot(fig)
             else:
                 st.info("No hay datos suficientes para análisis de palabras")
-        
-        self._explain_metrics()
     
     def display_seller_view(self, df):
         """Vista detallada por vendedor"""
@@ -1080,7 +1245,7 @@ class Dashboard:
         st.sidebar.title("Navegación")
         app_mode = st.sidebar.radio(
             "Seleccionar Vista:",
-            ["Resumen Ejecutivo", "Vista por Vendedor", "Revisión de Llamada"]
+            ["Resumen Ejecutivo", "Vista por Vendedor", "Revisión de Llamada", "KPIs Detallados"]
         )
         
         if app_mode == "Resumen Ejecutivo":
@@ -1089,6 +1254,8 @@ class Dashboard:
             self.display_seller_view(df)
         elif app_mode == "Revisión de Llamada":
             self.display_call_review(df)
+        elif app_mode == "KPIs Detallados":
+            self._create_kpi_tab(df)
 
 class CallMonitoringSystem:
     def __init__(self):
@@ -1298,5 +1465,4 @@ class CallMonitoringSystem:
 
 if __name__ == "__main__":
     system = CallMonitoringSystem()
-    system.run_streamlit_dashboard()  # ✅ Streamlit visualización, no procesamiento automático
-
+    system.run_streamlit_dashboard()
