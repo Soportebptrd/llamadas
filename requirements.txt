@@ -16,3 +16,5 @@ python-dotenv
 tqdm
 ffmpeg-python
 PyYAML
+sentence-transformers
+torch
