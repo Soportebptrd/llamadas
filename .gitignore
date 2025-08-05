@@ -1,17 +1,18 @@
-# Archivos de credenciales
+# Credenciales y configuraciones sensibles
 client_secrets.json
 service_account.json
 credentials.json
 settings.yaml
 
-# Directorios con modelos descargados
+# Datos y caché generados
 /models/
 /downloaded_audios/
 /results/
 
 # Archivos de entorno
-.env
-.env.local
+*.env
+*.secret
 
-# Archivos generados por Streamlit
-.streamlit/secrets.toml  # Solo si usas uno local para desarrollo
+# Python
+__pycache__/
+*.pyc
