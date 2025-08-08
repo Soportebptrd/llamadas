@@ -10,9 +10,7 @@ import re
 # CONFIGURACIÓN INICIAL
 # =====================
 st.set_page_config(page_title="Panel Evaluacion llamadas", layout="wide")
-st.title("📞 Panel de Ventas"
-         " - Análisis de llamadas y desempeño del equipo"
-         " - IDEMEFA")
+st.title("📞 Panel de Ventas")
 # =====================
 # CARGA DE DATOS
 # =====================
@@ -165,3 +163,4 @@ with tab3:
         fig_scatter = px.scatter(df_filtrado, x="Tono promedio", y="Energía de voz", color="% Apego al guion",
                                  size="Tasa de habla", title="Tono vs Energía")
         st.plotly_chart(fig_scatter, use_container_width=True)
+
