@@ -16,7 +16,7 @@ st.title("📞 Panel Evaluacion llamadas")
 # =====================
 @st.cache_data
 def cargar_datos():
-    url_csv = "https://drive.google.com/uc?export=download&id=19Bl3fDoM4jBoB6ZU-hQ7_-YVT2BhiQly/export?format=csv"
+    url_csv = "https://drive.google.com/uc?export=download&id=19Bl3fDoM4jBoB6ZU-hQ7_-YVT2BhiQly"
     df = pd.read_csv(url_csv)
     
     df.columns = df.columns.str.strip()
@@ -163,6 +163,7 @@ with tab3:
         fig_scatter = px.scatter(df_filtrado, x="Tono promedio", y="Energía de voz", color="% Apego al guion",
                                  size="Tasa de habla", title="Tono vs Energía")
         st.plotly_chart(fig_scatter, use_container_width=True)
+
 
 
 
